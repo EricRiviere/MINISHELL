@@ -1,0 +1,190 @@
+FASE 1 PARSEO: ANALISIS LEXICO
+
+Para el analiss lexico, se convierte la linea recibida como input del usuario a tokens.
+*Definicion de token:
+    Toda convinacion de caracteres separada por espacios o caracteres especiales.
+
+    Ejemplos de tokens:
+
+        1 - WORD TOKEN --> hola
+
+        2 - QUOTED TOKEN --> "hola" / 'hola'
+
+        3 - OPERATOR TOKEN --> < > << >> |
+
+Para poder gestionar los tokens más adelante (ya sea en fase de analisis sintactico, expansion de
+variables, ejecucion), la estructura que tiene cada token es la siguiente:
+
+--------------
+typedef struct  s_token t_token;
+struct s_token
+{
+    char    *value;
+    short   is_quote;
+    short   expand;
+    t_type  type;
+    t_token *next;
+};
+--------------
+
+En este caso se predefine la structura "s_token" para el tipo "t_token", porque dentro del mismo token
+hay un puntero al siguiente token.
+Entonces, la intención de esta primera fase de parseo (lexico), es crear una lista enlazada de tokens con
+una sola verificacion:
+
+    **Se verifica que no haya comillas simples o dobles abiertas pero no cerradas.**
+
+Más allá de eso, solo se crea cada uno de los tokens con sus variables para la gestion posterior (dentro del
+seteo de cada token y cada lista también se verifican las reservas de memoria y se libera la lista de tokens
+en caso que alguna de estas falle).
+
+Ahora que ya se tiene una idea basica de en que consiste esta primera parte del parseo, veamos el código:
+
+ENUMERACIONES:
+
+Hay 2 enumeraciones, una para el tipo de token (WORD, QUOTED y OPERATOR), y otra para cada tipo de operador
+(INPUT, OUTPUT, HEREDOC, APPEND, PIPE), estas ultimas se usan para "setear" el valor (char *value) en los
+tokens de tipo OPERADOR (esta logia se puede modificar, es solo para que sea pueda identificar más facilmente
+el subtipo de token y quizas gestionar más adelante).
+
+FUNCIONES LIBFT:
+
+Dentro de las funciones auxiliares, se usa:
+
+    1 - ft_strlen() --> Necesaria para ft_strdup y ft_strndup.
+    2 - ft_strchr() --> Util para setear la variable expand en los QUOTED TOKENS.
+    3 - ft_strdup() --> Necesaria para setear el valor de los operadores -en la logica actual-.
+
+FUNCIONES AUXILIARES:
+
+Se ha creado las siguientes funciones auxiliares:
+
+    1 - ft_strndup() --> Necesaria para setear el valor de WORD/QUOTE TOKENS.
+    2 - is_space()  --> Para hacer las lineas de codigo mas cortas.
+    3 - is_spacial_char() --> Lo mismo que is_space.
+    *Estas 2 ultimas, estan declaradas como "extern inline" functions.
+    Este tipo de funciones (inline) son funciones que el compilador optimiza para que funcionen
+    como si esa misma linea de código estuviera dentro del código de la funcion en la que se llama.
+    Se declaran como "extern" porque aun no sabemos la distribucion de archivos definitiva y asi se
+    puede incluir en el .h y usarlas en los archivos que sea necesario.
+
+FUNCIONES ESPECIFICAS DE TOKENS:
+
+    1 - init_token():
+        Esta función, solo recibe el tipo de token (WORD,QUOTE,OPERATOR), reserva el espacio en memoria
+        (se proteje y se devuelve un error especifico si falla), y setea de forma "provisional" todas las
+        variables del token MENOS el tipo de token que ya sera DEFINITIVO.
+    
+    2 - add_token():
+        Esta función recibe un puntero a la lista de tokens y al token que se quiere añadir.
+        Se crea un puntero de tipo token para recorrer la lista (curr_tkn).
+        Si no hay lista (arranca en NULL/ vacía), el token que recibe sera la cabeza de la lista.
+        Sino, se iguala curr_tkn a la cabeza para recorrerla hasta el final (curr_tkn->next) y se
+        añade el token recibido al final.
+    
+    3 - free_tkn_lst():
+        Esta función recibe un puntero a la lista de tokens y mientras haya tokens, usa un puntero
+        de tipo token creado para guardar referencias (next), este guarda la referencia al siguiente
+        token y libera el valor del token (es la unica variable para la que se reserva memoria de
+        forma dinamica dentro de la estructura), libera el nodo, y iguala la cabeza de la lista a 
+        la referencia guardada en next.
+
+Ahora puede ser util explicar que la parte del tokenizado se divide en 3 tipos de funciones:
+
+    1 - Funcion principal de tokenizado --> tokenize()
+
+    2 - Funciones de manejo de tipo de token:
+        --> manage_word()
+        --> manage_quote()
+        --> manage_operator()
+
+    3 - Funciones de parseo por tipo de token:
+        --> parse_quote()
+        --> parse_operator()
+        *Parse word no es necesario porque se gestiona todo en manage_word() (logica mas sencilla).
+
+1 - FUNCION TOKENIZE:
+
+    Esta función, crea un puntero a tkn_lst (lista enlazada de tokens) y a token (token que se añade
+    a la lista mientras se recorre la linea de comando recibida por el usuario).
+    Tambien se crean 2 ints para usarlos como índices al recorrer la linea (i / start).
+    Mientras haya linea:
+
+        1 - Si hay linea, se saltan los espacios/tab.
+        2 - Si hay linea, se setea start como el indice al caracter NO ESPACIO/TAB.
+            *Start se usa solo para quotes así que se podría setear más adelante*
+        3 - Si hay linea y no es espacio/tab:
+            3.1 - Si se encuentran comillas simples o dobles se llama a manage_quote().
+                  Si esta funcion retorna NULL, se sale del bucle de lectura de line y se
+                  retorna NULL también.
+            3.2 - Si se encuentra una pipe o redireccion (< > |) se llama a manage_operator().
+                  Si retorna NULL, se sale del bucle de line y se retorna NULL.
+            3.3 - Si no se encuentra ningun caracter especial, se llama a manage_word().
+                  Si retorna NULL, se sale del bucle y se retorna NULL.
+            3.4 - En cualquier otro caso se incrementa i (esto se puede eliminar cuando estemos
+                  seguros de que todos los casos estan cubiertos, mientras lo deje para que no
+                  entrara en un bucle infinito en ningun caso).
+    Este bucle se ejecuta hasta el final de la linea, y si llega al final retorna el listado de tokens.
+
+2 - FUNCIONES DE MANEJO Y PARSEO:
+
+    1 - manage_word():
+
+        Esta función es muy sencilla, solo recibe puntero a la linea, puntero al indice dentro del recorrido
+        de linea, y puntero a la lista de tokens.
+        Se crean int start/end para guardar indices de inicio y final de palabra, puntero a word que almacena
+        el valor de la palabra y puntero a tkn que almacenara la info de ese token de tipo word.
+        Se setea start al indice i recibido y mientras no sea un caracter especial (espacio/tab, comillas
+        simples/dobles o caracteres de operadores), aumenta el indice dentro de line (se setea end ahí).
+        Inicializa el token pasando el tipo "WORD", se usa strndup con start/end para crear la palabra que se
+        almacenara como valor del token (se proteje liberando tkn).
+        Se establede word como valor del token, se añade el token y se devuelve la lista.
+
+    2 - manage_quote():
+
+        2.1 - Fase de manejo:
+        
+        La funcion recibe linea, indice de linea(i), start(incide de comilla simple/doble) y tkn_lst.
+        Se crea char quote para almacenar el tipo de comilla y el token que se añadira.
+        Quote se establece en el caracter en el indice i y luego se umenta el indice.
+        Mientras haya linea y no sea igual a la quote establecida se aumenta el indice.
+        Si sale del bucle porque no queda linea significa que la comilla no esta cerrada y se devuelve un error
+        especifico, se libera la lista de tokens y se retorna NULL.
+        Sino, se establece end en el indice i, se aumenta, se llama a parse_quote(), se añade
+        el token a la lista y se devuelve la lista.
+
+        2.2 - Fase parseo --> parse_quote():
+
+        Se usa strndup para guardar el contenido del token entrecomillado en str (se usa start/end). Se proteje.
+        Se inicializa el token pasando el tipo QUOTED.
+        Se establece el valor con el valor guardado en str, se establece el valor is_quote con el mismo valor de quote
+        recibido (34 en el caso de comillas dobles 39 en el caso de simples).
+        Se establece expand usando strchr para ver si hay algun '$' dentro de str y se retorna el token.
+
+    3 - manage_operator():
+
+        3.1 - Fase manejo:
+
+        La función gestiona cada uno de los casos especificos:
+        3.1.1 --> >> APEND --> se llama a parse_operator() con APPEND y se aumenta el indice en 2.
+        3.1.2 --> << HEREDOC --> se llama a parse_operator() con HEREDOC y se aumenta el indice en 2.
+        3.1.3 --> > OUTPUT --> se llama a parse_operator() con OUTPUT y se aumenta el indice en 1.
+        3.1.4 --> < INPUT --> se llama a parse_operator() con INPUT y se aumenta el indice en 1.
+        3.1.5 --> | PIPE --> se llama a parse_operator() con PIPE y se aumenta el indice en 1.
+
+        3.2 - Fase parseo --> parse_operator():
+
+        Se crea un array de nombres de operadores, se inicializa el token pasando tipo OPERADOR, se almacena
+        en "name" el nombre de operador recibido usando strdup(). Si falla se devuelve error especifico, se libera el token.
+        Se setea el valor del token con el nombre de operador y se devuelve el token.
+
+FUNCION MAIN:
+
+La función main ahora mismo es solo de test para crear los tokens e imprimir sus valores.
+Se usa un bucle infinito para leer el input del usuario con readline.
+Si hay linea, se guarda en el historial con add_history().
+Se crea la lista de tokens llamando a la función tokenize y pasando la linea.
+Si se ha creado la lista, se usa curr_tkn para recorrerla e imprimir los valores.
+Despues se libera la lista de tokens y la linea.
+
+        

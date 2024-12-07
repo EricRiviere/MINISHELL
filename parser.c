@@ -4,7 +4,6 @@
 # include <readline/history.h>
 //------------------
 # include <stdlib.h> //malloc
-# include <string.h> //strdup
 
 typedef enum    s_type
 {
@@ -174,7 +173,7 @@ t_token    *parse_quote(char *line, char quote, int start, int end)
     str = ft_strndup (&line[start + 1], end - start - 1);
     if (!str)
     {
-        perror("dup token error\n");
+        perror("strndup token error\n");
         return (NULL);
     }
     tkn = init_token(QUOTED);
@@ -195,16 +194,12 @@ t_token   *manage_quote(char *line, int *i, int start, t_token **tkn_lst)
         (*i)++;
     if (!line[*i])
     {
+        perror("unclosed quote error\n");
         free_tkn_lst(*tkn_lst);
         return (NULL);
     }
     end = (*i)++;
     token = parse_quote(line, quote, start, end);
-    if (!token)
-    {
-        free_tkn_lst(*tkn_lst);
-        return (NULL);
-    }
     add_token(tkn_lst, token);
     return(*tkn_lst);
 }
@@ -219,6 +214,7 @@ t_token *parse_operator(t_operator operator)
     name = ft_strdup(operator_name[operator]);
     if (!name)
     {
+        perror("strdup token error\n");
         free(tkn);
         return (NULL);
     }
@@ -274,6 +270,7 @@ t_token *manage_word(char *line, int *i, t_token **tkn_lst)
     word = ft_strndup(&line[start], end - start);
     if (!word)
     {
+        perror("strndup token error\n");
         free(tkn);
         return (NULL);
     }
@@ -298,22 +295,22 @@ t_token *tokenize(char *line)
         start = i;
         if (line[i] && !is_space(line[i]))
         {
-            if (line[i] && (line[i] == '"' || line[i] == '\''))
+            if (line[i] == '"' || line[i] == '\'')
             {
                 if(!manage_quote(line, &i, start, &tkn_lst))
                     return (NULL);
             }
-            else if (line[i] && (line[i] == '<' || line[i] == '>' || line[i] == '|'))
+            else if (line[i] == '<' || line[i] == '>' || line[i] == '|')
             {
                 if (!manage_operator(line, &i, &tkn_lst))
                     return (NULL);
             }
-            else if (line[i] && !is_special_char(line[i]))
+            else if (!is_special_char(line[i]))
             {
                 if (!manage_word(line, &i, &tkn_lst))
                     return (NULL);
             }
-            else if (line[i])
+            else
                 i++;
         }
     }
