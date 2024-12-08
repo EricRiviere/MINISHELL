@@ -33,6 +33,14 @@ struct s_token
     t_token *next;
 };
 
+typedef struct  s_args
+{
+    char    *line;
+    int     *i;
+    t_token **tkn_lst;
+    int     spaces;
+}   t_args;
+
 //-------------------LIBFT
 size_t  ft_strlen(const char *str)
 {
@@ -120,6 +128,23 @@ extern inline int is_special_char(char c)
          c == '\'' || c == ' ' || (c >= 9 && c <= 13));
 }
 
+t_args  *pass_args(char *line, int *i, t_token **tkn_lst, int spaces)
+{
+    t_args  *args;
+
+    args = malloc(sizeof(t_args));
+    if (!args)
+    {
+        perror("args malloc error\n");
+        return (NULL);
+    }
+    args->line = line;
+    args->i = i;
+    args->tkn_lst = tkn_lst;
+    args->spaces = spaces;
+    return(args);
+}
+
 t_token *init_token(t_type type)
 {
     t_token *new_tkn;
@@ -166,12 +191,12 @@ void    free_tkn_lst(t_token *tkn_lst)
     }
 }
 
-t_token    *parse_quote(char *line, char quote, int start, int end, int spaces)
+t_token    *parse_quote(t_args *args, char quote, int start, int end)
 {
     char    *str;
     t_token *tkn;
 
-    str = ft_strndup (&line[start + 1], end - start - 1);
+    str = ft_strndup (&(args->line[start + 1]), end - start - 1);
     if (!str)
     {
         perror("strndup token error\n");
@@ -180,30 +205,30 @@ t_token    *parse_quote(char *line, char quote, int start, int end, int spaces)
     tkn = init_token(QUOTED);
     tkn->value = str;
     tkn->is_quote = quote;
-    tkn->has_space = spaces;
+    tkn->has_space = args->spaces;
     tkn->expand = (quote == '"' && ft_strchr(str, '$') != NULL);
     return (tkn);
 }
 
-t_token   *manage_quote(char *line, int *i, int start, t_token **tkn_lst, int spaces)
+t_token   *manage_quote(t_args *args, int start)
 {
     char    quote;
     int     end;
     t_token *token;
 
-    quote = line[(*i)++];
-    while (line[*i] && line[*i] != quote)
-        (*i)++;
-    if (!line[*i])
+    quote = args->line[(*args->i)++];
+    while (args->line[*args->i] && args->line[*args->i] != quote)
+        (*args->i)++;
+    if (!args->line[*args->i])
     {
         perror("unclosed quote error\n");
-        free_tkn_lst(*tkn_lst);
+        free_tkn_lst(*args->tkn_lst);
         return (NULL);
     }
-    end = (*i)++;
-    token = parse_quote(line, quote, start, end, spaces);
-    add_token(tkn_lst, token);
-    return(*tkn_lst);
+    end = (*args->i)++;
+    token = parse_quote(args, quote, start, end);
+    add_token(args->tkn_lst, token);
+    return(*(args->tkn_lst));
 }
 
 t_token *parse_operator(t_operator operator, int spaces)
@@ -225,52 +250,56 @@ t_token *parse_operator(t_operator operator, int spaces)
     return (tkn);
 }
 
-t_token *manage_operator(char *line, int *i, t_token **tkn_lst, int spaces)
+t_operator get_operator_type(const char *line, int i)
 {
-    t_token *token;
-
-    if (line[*i] == '>' && line[(*i) + 1] == '>')
-    {
-        token = parse_operator(APPEND, spaces);
-        (*i) += 2;
-    }
-    else if (line[*i] == '<' && line[(*i) + 1] == '<')
-    {
-        token = parse_operator(HEREDOC, spaces);
-        (*i) += 2;
-    }
-    else if (line[*i] == '>')
-    {
-        token = parse_operator(OUTPUT, spaces);
-        (*i)++;
-    }
-    else if (line[*i] == '<')
-    {
-        token = parse_operator(INPUT, spaces);
-        (*i)++;
-    }
-    else if (line[*i] == '|')
-    {
-        token = parse_operator(PIPE, spaces);
-        (*i)++;
-    }
-    add_token(tkn_lst, token);
-    return (*tkn_lst);
+    if (line[i] == '>' && line[i + 1] == '>')
+        return (APPEND);
+    if (line[i] == '<' && line[i + 1] == '<')
+        return (HEREDOC);
+    if (line[i] == '>')
+        return (OUTPUT);
+    if (line[i] == '<')
+        return (INPUT);
+    return PIPE;
 }
 
-t_token *manage_word(char *line, int *i, t_token **tkn_lst, int spaces)
+int create_operator_token(t_args *args, t_operator operator, int increment)
+{
+    t_token *token = parse_operator(operator, args->spaces);
+    if (!token)
+        return (0);
+    *(args->i) += increment;
+    add_token(args->tkn_lst, token);
+    return (1);
+}
+
+t_token *manage_operator(t_args *args)
+{
+    int increment;
+
+    t_operator operator = get_operator_type(args->line, *(args->i));
+    if (operator == APPEND || operator == HEREDOC)
+        increment = 2;
+    else
+        increment = 1;
+    if (!create_operator_token(args, operator, increment))
+        return (NULL);
+    return (*(args->tkn_lst));
+}
+
+t_token *manage_word(t_args *args)
 {
     int start;
     int end;
     char    *word;
     t_token *tkn;
 
-    start = (*i);
-    while(line[*i] && !is_special_char(line[*i]))
-        (*i)++;
-    end = (*i);
+    start = (*args->i);
+    while(args->line[*args->i] && !is_special_char(args->line[*args->i]))
+        (*args->i)++;
+    end = (*args->i);
     tkn = init_token(WORD);
-    word = ft_strndup(&line[start], end - start);
+    word = ft_strndup(&(args->line[start]), end - start);
     if (!word)
     {
         perror("strndup token error\n");
@@ -278,49 +307,56 @@ t_token *manage_word(char *line, int *i, t_token **tkn_lst, int spaces)
         return (NULL);
     }
     tkn->value = word;
-    tkn->has_space = spaces;
-    add_token(tkn_lst, tkn);
-    return(*tkn_lst);
+    tkn->has_space = args->spaces;
+    add_token(args->tkn_lst, tkn);
+    return(*(args->tkn_lst));
+}
+
+void skip_spaces(const char *line, int *i, int *spaces)
+{
+    *spaces = 0;
+    while (line[*i] && is_space(line[*i]))
+    {
+        (*spaces)++;
+        (*i)++;
+    }
+}
+
+int process_token(t_args *args)
+{
+    int start = *(args->i);
+    
+    if (args->line[*(args->i)] == '"' || args->line[*(args->i)] == '\'')
+        return (manage_quote(args, start) != NULL);
+    if (args->line[*(args->i)] == '<' || args->line[*(args->i)] == '>'
+        || args->line[*(args->i)] == '|')
+        return (manage_operator(args) != NULL);
+    if (!is_special_char(args->line[*(args->i)]))
+        return (manage_word(args) != NULL);
+    (*(args->i))++;
+    return (1);
 }
 
 t_token *tokenize(char *line)
 {
     t_token *tkn_lst;
-    t_token    *token;
-    int     i;
-    int    start;
-    int     spaces;
+    int i;
+    int spaces;
+    t_args *args;
 
-    tkn_lst = NULL;
     i = 0;
+    tkn_lst = NULL;
     while (line[i])
     {
-        spaces = 0;
-        while(line[i] && is_space(line[i]))
-        {
-            spaces++;
-            i++;
-        }
-        start = i;
+        skip_spaces(line, &i, &spaces);
         if (line[i] && !is_space(line[i]))
         {
-            if (line[i] == '"' || line[i] == '\'')
-            {
-                if(!manage_quote(line, &i, start, &tkn_lst, spaces))
-                    return (NULL);
-            }
-            else if (line[i] == '<' || line[i] == '>' || line[i] == '|')
-            {
-                if (!manage_operator(line, &i, &tkn_lst, spaces))
-                    return (NULL);
-            }
-            else if (!is_special_char(line[i]))
-            {
-                if (!manage_word(line, &i, &tkn_lst, spaces))
-                    return (NULL);
-            }
-            else
-                i++;
+            args = pass_args(line, &i, &tkn_lst, spaces);
+            if (!args)
+                return (NULL);
+            if (!process_token(args))
+                return (NULL);
+            free(args);
         }
     }
     return (tkn_lst);

@@ -187,4 +187,134 @@ Se crea la lista de tokens llamando a la función tokenize y pasando la linea.
 Si se ha creado la lista, se usa curr_tkn para recorrerla e imprimir los valores.
 Despues se libera la lista de tokens y la linea.
 
-        
+--------------------------
+
+Version parser_args:
+
+Para incorporar el control de los espacios en la lectura de linea y creación de los tokens, se ha dejado el documento original
+(parser.c) igual que estaba y solamente se ha añadido la variable "has_space" a la estructura del token.
+En la función tokenize() se ha creado la variable spaces, y esta aumenta en cada ciclo, en el primer bucle while. Así, antes de
+los condicionales para tipo de token, esta variable se establece y se manda como argumento a cada uno de los managers para que 
+cada token tenga seteada esa variable.
+
+REFACTORIZACIÓN para has_space:
+
+Como la normativa de 42 indica que las funciones no pueden tener MAS DE 25 LINEAS y no se pueden mandar mas de 4 ARGUMENTOS por
+función, se ha creado la estructura args.
+Este tipo de variable tiene:
+
+    - Puntero a string linea.
+    - Puntero a indice i dentro del array de la linea.
+    - Puntero a la lista de tokens (tkn_lst).
+    - Variable (int) spaces (registra los espacios a la izquierda de cada token)
+
+TOKENIZE:
+
+Siguiendo el flujo del programa, en la función tokenize(), se incluye un puntero de tipo t_args *args, que pasara a las funciones
+los argumentos necesarios para ser manejados.
+
+Se ha creado la función skip_spaces() --> Como indica su nombre, solo salta los espacios en la linea, actualiza el indice y registra
+el numero de espacios antes de cada token:
+
+    ----------------
+    void skip_spaces(const char *line, int *i, int *spaces)
+    {
+        *spaces = 0;
+        while (line[*i] && is_space(line[*i]))
+        {
+            (*spaces)++;
+            (*i)++;
+        }
+    }
+    ----------------
+
+Setea spaces a 0 y mientras sea un espacio (usa is_space()), aumenta el valor de spaces y el indice.
+
+Luego, si queda linea y el caracter no es un espacio:
+
+    1 - Se establece el puntero a args con la funcion pass_args():
+
+    --------------
+    t_args  *pass_args(char *line, int *i, t_token **tkn_lst, int spaces)
+    {
+        t_args  *args;
+
+        args = malloc(sizeof(t_args));
+        if (!args)
+        {
+            perror("args malloc error\n");
+            return (NULL);
+        }
+        args->line = line;
+        args->i = i;
+        args->tkn_lst = tkn_lst;
+        args->spaces = spaces;
+        return(args);
+    }
+    --------------
+
+    Esta funcion reserva el espacio para args, se proteje (si falla se manda error y devuelve NULL).
+    Se setea cada una de las variables de la estructura como la recibida y se retorna el puntero a args.
+
+    Si falla la reserva de args y retorna NULL, despues de la función también se retorna NULL al main.
+
+    2 - Se llama a la función process_token() que recibe args.
+
+    --------------
+    int process_token(t_args *args)
+    {
+        int start = *(args->i);
+    
+        if (args->line[*(args->i)] == '"' || args->line[*(args->i)] == '\'')
+            return (manage_quote(args, start) != NULL);
+        if (args->line[*(args->i)] == '<' || args->line[*(args->i)] == '>'
+            || args->line[*(args->i)] == '|')
+            return (manage_operator(args) != NULL);
+        if (!is_special_char(args->line[*(args->i)]))
+            return (manage_word(args) != NULL);
+        (*(args->i))++;
+        return (1);
+    }
+    --------------
+
+    Esta función recibe args y llama a los managers en función del caracter especial.
+    Esto es exactamente igual que antes pero refactorizado.
+    La unica diferencia notable es que en esta función (y en tódo el código que sigue), en lugar de actualizar
+    cada una de las variables, actualizaremos su valor dentro de la estructura args:
+
+        args->line[*i(args->i)] --> itera a través de la linea.
+        (*(args->i))++; --> Esto actualiza el índice del caracter en la linea.
+    
+    *Resto de ejemplos de actualización de datos dentro de las subfunciones posteriores:
+
+        - return (*(args->tkn_lst)) --> Así devolvemos puntero a tkn_lst dentro de args.
+        - tkn.>has_space = args->spaces --> Así seteamos la variable dentro de cada token.
+
+    Más alla de estos cambios (que afectan a todos los managers/parsers), la función que más se ha refactorizado es
+    manage_operator() porque era MUY LARGA.
+
+    *REFACTORIZACIÓN de MANAGE_OPERATOR*
+
+    Esta función se ha dividido en 3:
+
+        1 - manage_operator():
+
+            Esta función establece el operador llamando a get_operator_type().
+            Si el operador es APPEND o HERDOC, se incrementa i en 2, sino en 1.
+            Se llama a create_operator_token(), y si devuelve NULL, retorna NULL.
+            Sino, retorna puntero a la lista de tokens.
+
+        2 - get_operator_type()
+
+            Esta función solo recoge los casos de caracteres a encontrar para cada tipo de operador y lo retorna.
+
+        3 - create_operator_token()
+
+            Esta función establece el token llamando a la función parse_operator(), si falla algo devuelve 0 (false).
+            Si todo va bien, aumenta el indice de la linea dentro de args con el incremento recibido de manage_operator().
+            Añade el token a la lista de tokens y retorna 1 (true).
+
+    Si falla cualquier cosa en process_token() retorna NULL al main.
+    Después de gestionar cada token, se libera args.
+
+    Finalmente la función tokenize devuelve la lista de tokens como en la versión anterior de código.
