@@ -4,6 +4,7 @@
 # include <readline/history.h>
 //------------------
 # include <stdlib.h> //malloc
+# include <unistd.h> // write
 
 typedef enum    s_type
 {
@@ -91,6 +92,24 @@ char	*ft_strdup(const char *str)
 	dest[i] = 0;
 	return (dest);
 }
+
+void	ft_putstr_fd(char *s, int fd)
+{
+	if (s)
+		write (fd, s, ft_strlen(s));
+}
+
+int	ft_strncmp(const char *s1, const char *s2, size_t n)
+{
+	size_t	i;
+
+	if (n == 0)
+		return (0);
+	i = 0;
+	while (s1[i] && s1[i] == s2[i] && i < n - 1)
+		i++;
+	return ((unsigned char)s1[i] - (unsigned char)s2[i]);
+}
 //-------------------LIBFT
 
 char    *ft_strndup(const char *str, size_t len)
@@ -127,6 +146,110 @@ extern inline int is_special_char(char c)
     return (c == '<' || c == '>' || c == '|' || c == '"' ||
          c == '\'' || c == ' ' || (c >= 9 && c <= 13));
 }
+
+//-------------------ENV
+typedef struct s_env
+{
+    char    *key;
+    char    *value;
+    struct s_env *next;
+}   t_env;
+
+
+void    free_env_list(t_env *env_list)
+{
+    t_env   *tmp;
+    while (env_list)
+    {
+        tmp = env_list;
+        env_list = env_list->next;
+        free(tmp->key);
+        free(tmp->value);
+        free(tmp);
+    }
+}
+
+void    add_env_variable(t_env **env_list, char *key, char *value)
+{
+    t_env   *new_node;
+    
+    if (!(new_node = malloc(sizeof(t_env))))
+    {
+        free_env_list(*env_list);
+        perror("malloc error creating env node\n");
+        return ;
+    }
+    if (!(new_node->key = ft_strdup(key)))
+    {
+        free(new_node);
+        perror("malloc error for env key\n");
+        return ;
+    }
+    if (!(new_node->value = ft_strdup(value)))
+    {
+        free(new_node->key);
+        free(new_node);
+        perror("malloc error for env value\n");
+        return ;
+    }
+    new_node->next = *env_list;
+    *env_list = new_node;
+}
+
+t_env *init_env_list(char **env)
+{
+    t_env   *env_list = NULL;
+    char    *key;
+    char    *value;
+    char    *separator;
+
+    while(*env)
+    {
+        separator = ft_strchr(*env, '=');
+        if (separator)
+        {
+            if (!(key = ft_strndup(*env, separator - *env)))
+            {
+                perror("malloc error in env key duplication\n");
+                free_env_list(env_list);
+                return (NULL);
+            }
+            if(!(value = ft_strdup(separator + 1)))
+            {
+                perror("malloc error in env value duplication\n");
+                free(key);
+                free_env_list(env_list);
+                return (NULL);
+            }
+            add_env_variable(&env_list, key, value);
+            free(key);
+            free(value);
+        }
+        env++;
+    }
+    return (env_list);
+}
+
+void    print_env_list(t_env *env_list)
+{
+    while(env_list)
+    {
+        printf("%s=%s\n", env_list->key, env_list->value);
+        env_list = env_list->next;
+    }
+}
+
+char    *get_env_value(char *str, t_env *env_list)
+{
+    while (env_list)
+    {
+        if (strcmp(str, env_list->key) == 0)        
+            return (env_list->value);
+        env_list = env_list->next;
+    }
+    return (NULL);
+}
+//-------------------ENV
 
 t_args  *pass_args(char *line, int *i, t_token **tkn_lst, int spaces)
 {
@@ -185,8 +308,7 @@ void    free_tkn_lst(t_token *tkn_lst)
     while(tkn_lst)
     {
         next = tkn_lst->next;
-        if (tkn_lst->value)
-            free(tkn_lst->value);
+        free(tkn_lst->value);
         free(tkn_lst);
         tkn_lst = next;
     }
@@ -237,7 +359,7 @@ t_token *parse_operator(t_operator operator, int spaces)
     char    *name;
     t_token *tkn;
 
-    char    *operator_name[]={"INPUT", "OUTPUT", "HEREDOC", "APPEND", "PIPE"};
+    char    *operator_name[]={"<", ">", "<<", ">>", "|"};
     tkn = init_token(OPERATOR);
     name = ft_strdup(operator_name[operator]);
     if (!name)
@@ -261,7 +383,7 @@ t_operator get_operator_type(const char *line, int i)
         return (OUTPUT);
     if (line[i] == '<')
         return (INPUT);
-    return PIPE;
+    return (PIPE);
 }
 
 int create_operator_token(t_args *args, t_operator operator, int increment)
@@ -292,12 +414,18 @@ t_token *manage_word(t_args *args)
 {
     int start;
     int end;
+    int expand_value;
     char    *word;
     t_token *tkn;
 
+    expand_value = 0;
     start = (*args->i);
     while(args->line[*args->i] && !is_special_char(args->line[*args->i]))
+    {
+        if (args->line[*args->i] == '$')
+            expand_value = 1;
         (*args->i)++;
+    }
     end = (*args->i);
     tkn = init_token(WORD);
     word = ft_strndup(&(args->line[start]), end - start);
@@ -309,6 +437,7 @@ t_token *manage_word(t_args *args)
     }
     tkn->value = word;
     tkn->has_space = args->spaces;
+    tkn->expand = expand_value;
     add_token(args->tkn_lst, tkn);
     return(*(args->tkn_lst));
 }
@@ -365,13 +494,64 @@ t_token *tokenize(char *line)
     }
     return (tkn_lst);
 }
+//------------------------SYNTAX CHECK
+int syntax_check(t_token *tkn_lst)
+{
+    t_token *current;
+    
+    current = tkn_lst;
+    while (current)
+    {
+        if (current->type == 2)
+        {
+            if (current->value[0] == '|')
+            {
+                if (!current->next || current == tkn_lst || current->next->type == OPERATOR) // Pipe al inicio o sin comando después
+                    return (ft_putstr_fd("Syntax error: invalid pipe\n", 2), 0);
+            }
+            else if (current->value[0] == '>' || current->value[0] == '<')
+            {
+                if (!current->next || !(current->next->type == WORD || current->next->type == QUOTED)) // Redirección sin archivo o token válido después
+                    return (ft_putstr_fd("Syntax error: invalid redirection\n", 2), 0);
+            }
+        }
+        current = current->next;
+    }
+    return (1); // Sintaxis válida
+}
+//------------------------SYNTAX CHECK
+//------------------------EXPANSION
+void    expand_variables(t_token *token, t_env *env_lst)
+{
+    int i;
 
-int main(void)
+    i = 0;
+    if (token->expand)
+    {
+        while(token->value[i])
+        {
+            if (token->value[i] == '$')
+                printf("Expansion\n");
+            i++;
+        }
+    }
+    return ;
+}
+//------------------------EXPANSION
+int main(int argc, char **argv, char **env)
 {
     char    *line;
     t_token *tkn_lst;
     t_token *curr_tkn;
+    t_env   *env_lst;
 
+    (void)argv;
+    if (argc != 1)
+    {
+        printf("Wrong number of arguments\n");
+        return (1);
+    }
+    env_lst = init_env_list(env);
     while (1)
     {
         line = readline("minishell> ");
@@ -379,8 +559,26 @@ int main(void)
             break;
         if (line)
         {
+            if (ft_strncmp(line, "env", 3) == 0)
+                print_env_list(env_lst);
             add_history(line);
             tkn_lst = tokenize(line);
+            if (tkn_lst && !syntax_check(tkn_lst))
+            {
+                free_tkn_lst(tkn_lst);
+                free(line);
+                continue;
+            }
+            if (tkn_lst)
+            {
+                curr_tkn = tkn_lst;
+                while (curr_tkn)
+                {
+                    expand_variables(curr_tkn, env_lst);
+                    curr_tkn = curr_tkn->next;
+                }
+                curr_tkn = tkn_lst;
+            }
             if (tkn_lst)
             {
                 curr_tkn = tkn_lst;
@@ -398,5 +596,7 @@ int main(void)
         }
         free(line);
     }
+    free_env_list(env_lst);
     rl_clear_history();
+    return (0);
 }
