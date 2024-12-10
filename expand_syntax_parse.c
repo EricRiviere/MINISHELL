@@ -110,6 +110,16 @@ int	ft_strncmp(const char *s1, const char *s2, size_t n)
 		i++;
 	return ((unsigned char)s1[i] - (unsigned char)s2[i]);
 }
+
+int	ft_isalpha(int c)
+{
+	return ((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z'));
+}
+
+int	ft_isdigit(int c)
+{
+	return (c >= '0' && c <= '9');
+}
 //-------------------LIBFT
 
 char    *ft_strndup(const char *str, size_t len)
@@ -241,8 +251,8 @@ void    print_env_list(t_env *env_list)
 
 char    *get_env_value(char *str, t_env *env_list)
 {
-    if (str[0] == '$')
-        str++;
+    // if (str[0] == '$')
+    //     str++;
     while (env_list)
     {
         if (ft_strncmp(str, env_list->key, ft_strlen(str)) == 0)  
@@ -585,16 +595,21 @@ char *ft_strjoin_free(char *s1, char *s2)
 {
     char *result;
 
-    if (!s1)
+    if (!s1 && s2)
         return (ft_strdup(s2));
     if (!s2)
-        return (ft_strdup(s1));
+        return (s1);
     result = ft_strjoin(s1, s2);
     free(s1);
     return (result);
 }
 
-char *expand_quoted_value(char *str, t_env *env_lst)
+int is_valid_env_char(char c)
+{
+    return (ft_isalpha(c) || ft_isdigit(c) || c == '_');
+}
+
+char *expand_value(char *str, t_env *env_lst)
 {
     int     i;
     int     start;
@@ -614,12 +629,13 @@ char *expand_quoted_value(char *str, t_env *env_lst)
                 i++;
             temp = ft_strndup(&str[start], i - start); // Extrae texto literal
             expand = ft_strjoin_free(expand, temp);   // Une y libera `expand`
+            free(temp);
         }
         // Caso: expansión de variable
         else if (str[i++] == '$')
         {
             start = i;
-            while (str[i] && str[i] != '$' && !is_space(str[i]))
+            while (str[i] && is_valid_env_char(str[i]))
                 i++;
             temp = ft_strndup(&str[start], i - start); // Nombre de la variable
             sub_expand = get_env_value(temp, env_lst); // Busca en la lista de variables
@@ -630,26 +646,22 @@ char *expand_quoted_value(char *str, t_env *env_lst)
     return (expand);
 }
 
-void    expand_variables(t_token *token, t_env *env_lst)
+void expand_variables(t_token *token, t_env *env_lst)
 {
-    int i;
-    char    *expansion;
+    char *new_value;
 
-    i = 0;
     if (token->expand)
     {
-        if (token->type == WORD)
-        {
-            if (!(expansion = get_env_value(token->value, env_lst)))
-                token->value = ft_strdup("");
-            else
-                token->value = expansion;
-        }
-        else if (token->type == QUOTED)
-            token->value = expand_quoted_value(token->value, env_lst);
+        if (token->type == WORD || token->type == QUOTED)
+            new_value = expand_value(token->value, env_lst);
+        else
+            return;
+        // Libera el valor anterior y actualiza con el nuevo
+        free(token->value);
+        token->value = new_value;
     }
-    return ;
 }
+
 
 //------------------------EXPANSION
 int main(int argc, char **argv, char **env)
