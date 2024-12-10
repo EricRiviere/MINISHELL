@@ -241,9 +241,11 @@ void    print_env_list(t_env *env_list)
 
 char    *get_env_value(char *str, t_env *env_list)
 {
+    if (str[0] == '$')
+        str++;
     while (env_list)
     {
-        if (strcmp(str, env_list->key) == 0)        
+        if (ft_strncmp(str, env_list->key, ft_strlen(str)) == 0)  
             return (env_list->value);
         env_list = env_list->next;
     }
@@ -308,7 +310,8 @@ void    free_tkn_lst(t_token *tkn_lst)
     while(tkn_lst)
     {
         next = tkn_lst->next;
-        free(tkn_lst->value);
+        if (tkn_lst->value)
+            free(tkn_lst->value);
         free(tkn_lst);
         tkn_lst = next;
     }
@@ -521,22 +524,133 @@ int syntax_check(t_token *tkn_lst)
 }
 //------------------------SYNTAX CHECK
 //------------------------EXPANSION
+size_t	ft_strlcpy(char *dest, const char *src, size_t size)
+{
+	size_t	i;
+
+	i = 0;
+	if (size == 0)
+		return (ft_strlen(src));
+	while (src[i] && i < (size - 1))
+	{
+		dest[i] = src[i];
+		i++;
+	}
+	dest[i] = 0;
+	return (ft_strlen(src));
+}
+
+size_t	ft_strlcat(char *dst, const char *src, size_t size)
+{
+	size_t	dst_len;
+	size_t	src_len;
+	size_t	i;
+	size_t	j;
+
+	dst_len = ft_strlen(dst);
+	src_len = ft_strlen(src);
+	if (size == 0 || size <= dst_len)
+		return (size + src_len);
+	i = 0;
+	j = dst_len;
+	while (src[i] && j < (size - 1))
+	{
+		dst[j] = src[i];
+		i++;
+		j++;
+	}
+	dst[j] = 0;
+	return (dst_len + src_len);
+}
+
+char	*ft_strjoin(char const *s1, char const *s2)
+{
+	char	*s3;
+	size_t	s1len;
+	size_t	s2len;
+
+	if (!s1 || !s2)
+		return (NULL);
+	s1len = ft_strlen(s1);
+	s2len = ft_strlen(s2);
+	s3 = (char *)malloc(sizeof(char) * (s1len + s2len + 1));
+	if (!s3)
+		return (NULL);
+	ft_strlcpy(s3, s1, s1len + 1);
+	ft_strlcat(s3, s2, s1len + s2len + 1);
+	return (s3);
+}
+
+char *ft_strjoin_free(char *s1, char *s2)
+{
+    char *result;
+
+    if (!s1)
+        return (ft_strdup(s2));
+    if (!s2)
+        return (ft_strdup(s1));
+    result = ft_strjoin(s1, s2);
+    free(s1);
+    return (result);
+}
+
+char *expand_quoted_value(char *str, t_env *env_lst)
+{
+    int     i;
+    int     start;
+    char    *temp;
+    char    *sub_expand;
+    char    *expand;
+
+    i = 0;
+    expand = NULL;
+    while (str[i])
+    {
+        // Caso: texto literal antes de un '$'
+        if (str[i] != '$')
+        {
+            start = i;
+            while (str[i] && str[i] != '$')
+                i++;
+            temp = ft_strndup(&str[start], i - start); // Extrae texto literal
+            expand = ft_strjoin_free(expand, temp);   // Une y libera `expand`
+        }
+        // Caso: expansión de variable
+        else if (str[i++] == '$')
+        {
+            start = i;
+            while (str[i] && str[i] != '$' && !is_space(str[i]))
+                i++;
+            temp = ft_strndup(&str[start], i - start); // Nombre de la variable
+            sub_expand = get_env_value(temp, env_lst); // Busca en la lista de variables
+            free(temp);                                // Libera `temp`
+            expand = ft_strjoin_free(expand, sub_expand); // Une y libera `expand`
+        }
+    }
+    return (expand);
+}
+
 void    expand_variables(t_token *token, t_env *env_lst)
 {
     int i;
+    char    *expansion;
 
     i = 0;
     if (token->expand)
     {
-        while(token->value[i])
+        if (token->type == WORD)
         {
-            if (token->value[i] == '$')
-                printf("Expansion\n");
-            i++;
+            if (!(expansion = get_env_value(token->value, env_lst)))
+                token->value = ft_strdup("");
+            else
+                token->value = expansion;
         }
+        else if (token->type == QUOTED)
+            token->value = expand_quoted_value(token->value, env_lst);
     }
     return ;
 }
+
 //------------------------EXPANSION
 int main(int argc, char **argv, char **env)
 {
@@ -597,6 +711,5 @@ int main(int argc, char **argv, char **env)
         free(line);
     }
     free_env_list(env_lst);
-    rl_clear_history();
     return (0);
 }
