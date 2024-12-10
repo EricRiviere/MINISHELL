@@ -124,3 +124,13 @@ char	*ft_strjoin(char const *s1, char const *s2)
 	ft_strlcat(s3, s2, s1len + s2len + 1);
 	return (s3);
 }
+
+int	ft_isalpha(int c)
+{
+	return ((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z'));
+}
+
+int	ft_isdigit(int c)
+{
+	return (c >= '0' && c <= '9');
+}

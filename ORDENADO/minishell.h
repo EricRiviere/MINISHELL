@@ -62,12 +62,13 @@ int	ft_strncmp(const char *s1, const char *s2, size_t n);
 size_t	ft_strlcpy(char *dest, const char *src, size_t size);
 size_t	ft_strlcat(char *dst, const char *src, size_t size);
 char	*ft_strjoin(char const *s1, char const *s2);
+int	ft_isalpha(int c);
+int	ft_isdigit(int c);
 //------------------ FUNCIONES UTILS
 char    *ft_strndup(const char *str, size_t len);
 int is_space(char c);
 int is_special_char(char c);
 void skip_spaces(const char *line, int *i, int *spaces);
-
 //------------------ FUNCIONES ENV
 void    free_env_list(t_env *env_list);
 void    add_env_variable(t_env **env_list, char *key, char *value);
@@ -91,7 +92,8 @@ t_token *tokenize(char *line);
 //------------------ FUNCIONES SINTAXIS Y EXPANSION
 int syntax_check(t_token *tkn_lst);
 char *ft_strjoin_free(char *s1, char *s2);
-char *expand_quoted_value(char *str, t_env *env_lst);
+int is_valid_env_char(char c);
+char *expand_value(char *str, t_env *env_lst);
 void    expand_variables(t_token *token, t_env *env_lst);
 //------------------
 //------------------
