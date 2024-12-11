@@ -634,13 +634,22 @@ char *expand_value(char *str, t_env *env_lst)
         // Caso: expansión de variable
         else if (str[i++] == '$')
         {
-            start = i;
-            while (str[i] && is_valid_env_char(str[i]))
-                i++;
-            temp = ft_strndup(&str[start], i - start); // Nombre de la variable
-            sub_expand = get_env_value(temp, env_lst); // Busca en la lista de variables
-            free(temp);                                // Libera `temp`
-            expand = ft_strjoin_free(expand, sub_expand); // Une y libera `expand`
+           if (!str[i] || str[i] == ' ' || !is_valid_env_char(str[i])) // Caso literal
+            {
+            temp = ft_strdup("$"); // Conserva el símbolo literal
+            expand = ft_strjoin_free(expand, temp);
+            free(temp);
+            }
+            else
+            {
+                start = i;
+                while (str[i] && is_valid_env_char(str[i]))
+                    i++;
+                temp = ft_strndup(&str[start], i - start); // Nombre de la variable
+                sub_expand = get_env_value(temp, env_lst); // Busca en la lista de variables
+                free(temp);                                // Libera `temp`
+                expand = ft_strjoin_free(expand, sub_expand); // Une y libera `expand`
+            }
         }
     }
     return (expand);
