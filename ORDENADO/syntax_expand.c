@@ -47,7 +47,7 @@ int is_valid_env_char(char c)
     return (ft_isalpha(c) || ft_isdigit(c) || c == '_');
 }
 
-char *expand_value(char *str, t_env *env_lst)
+char *expand_value(t_token *token, t_env *env_lst)
 {
     int     i;
     int     start;
@@ -55,24 +55,26 @@ char *expand_value(char *str, t_env *env_lst)
     char    *sub_expand;
     char    *expand;
 
+        if (token->prev && ft_strncmp(token->prev->value, "<<", 2) == 0)
+        return (ft_strdup(token->value));
     i = 0;
     expand = NULL;
-    while (str[i])
+    while (token->value[i])
     {
         // Caso: texto literal antes de un '$'
-        if (str[i] != '$')
+        if (token->value[i] != '$')
         {
             start = i;
-            while (str[i] && str[i] != '$')
+            while (token->value[i] && token->value[i] != '$')
                 i++;
-            temp = ft_strndup(&str[start], i - start); // Extrae texto literal
+            temp = ft_strndup(&token->value[start], i - start); // Extrae texto literal
             expand = ft_strjoin_free(expand, temp);   // Une y libera `expand`
             free(temp);
         }
         // Caso: expansión de variable
-        else if (str[i++] == '$')
+        else if (token->value[i++] == '$')
         {
-           if (!str[i] || str[i] == ' ' || !is_valid_env_char(str[i])) // Caso literal
+            if (!token->value[i] || token->value[i] == ' ' || !is_valid_env_char(token->value[i])) // Caso literal
             {
             temp = ft_strdup("$"); // Conserva el símbolo literal
             expand = ft_strjoin_free(expand, temp);
@@ -81,9 +83,9 @@ char *expand_value(char *str, t_env *env_lst)
             else
             {
                 start = i;
-                while (str[i] && is_valid_env_char(str[i]))
+                while (token->value[i] && is_valid_env_char(token->value[i]))
                     i++;
-                temp = ft_strndup(&str[start], i - start); // Nombre de la variable
+                temp = ft_strndup(&token->value[start], i - start); // Nombre de la variable
                 sub_expand = get_env_value(temp, env_lst); // Busca en la lista de variables
                 free(temp);                                // Libera `temp`
                 expand = ft_strjoin_free(expand, sub_expand); // Une y libera `expand`
@@ -101,7 +103,7 @@ void expand_variables(t_token *token, t_env *env_lst)
     if (token->expand)
     {
         if (token->type == WORD || token->type == QUOTED)
-            new_value = expand_value(token->value, env_lst);
+            new_value = expand_value(token, env_lst);
         else
             return;
         // Libera el valor anterior y actualiza con el nuevo

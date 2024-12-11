@@ -32,6 +32,7 @@ t_token *init_token(t_type type)
     new_tkn->expand = 0;
     new_tkn->type = type;
     new_tkn->next = NULL;
+    new_tkn->next = NULL;
     return(new_tkn);
 }
 
@@ -47,6 +48,7 @@ void    add_token(t_token **tkn_lst, t_token *token)
         while (curr_tkn->next)
             curr_tkn = curr_tkn->next;
         curr_tkn->next = token;
+        token->prev = curr_tkn;
     }
 }
 

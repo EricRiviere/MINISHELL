@@ -37,6 +37,7 @@ struct s_token
     int     has_space;
     t_type  type;
     t_token *next;
+    t_token *prev;
 };
 //------------------ ESTRUCTURA ARGUMENTOS
 typedef struct  s_args
@@ -93,7 +94,7 @@ t_token *tokenize(char *line);
 int syntax_check(t_token *tkn_lst);
 char *ft_strjoin_free(char *s1, char *s2);
 int is_valid_env_char(char c);
-char *expand_value(char *str, t_env *env_lst);
+char *expand_value(t_token *token, t_env *env_lst);
 void    expand_variables(t_token *token, t_env *env_lst);
 //------------------
 //------------------
