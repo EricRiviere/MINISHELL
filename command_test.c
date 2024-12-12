@@ -639,9 +639,9 @@ char *expand_value(t_token *token, t_env *env_lst)
         {
             if (!token->value[i] || token->value[i] == ' ' || !is_valid_env_char(token->value[i])) // Caso literal
             {
-            temp = ft_strdup("$"); // Conserva el símbolo literal
-            expand = ft_strjoin_free(expand, temp);
-            free(temp);
+                temp = ft_strdup("$"); // Conserva el símbolo literal
+                expand = ft_strjoin_free(expand, temp);
+                free(temp);
             }
             else
             {
@@ -658,14 +658,67 @@ char *expand_value(t_token *token, t_env *env_lst)
     return (expand);
 }
 
+char *expand_word(t_token *token, t_env *env_lst)
+{
+    int     i;
+    int     start;
+    char    *temp;
+    char    *sub_expand;
+    char    *expand;
+
+    if (token->prev && ft_strncmp(token->prev->value, "<<", 2) == 0)
+        return (ft_strdup(token->value));
+    i = 0;
+    expand = NULL;
+    while (token->value[i])
+    {
+        // Caso: texto literal antes de un '$'
+        if (token->value[i] != '$')
+        {
+            start = i;
+            while (token->value[i] && token->value[i] != '$') // Captura texto literal
+                i++;
+            temp = ft_strndup(&token->value[start], i - start);
+            expand = ft_strjoin_free(expand, temp); // Agrega texto literal
+            free(temp);
+        }
+        // Caso: expansión de variable
+        else if (token->value[i++] == '$')
+        {
+            // Verifica si el siguiente carácter no es válido para una variable
+            if (!token->value[i] || !is_valid_env_char(token->value[i]))
+            {
+                temp = ft_strdup("$"); // Conserva '$' literal si no hay variable válida
+                expand = ft_strjoin_free(expand, temp);
+                free(temp);
+            }
+            else
+            {
+                start = i;
+                while (token->value[i] && is_valid_env_char(token->value[i])) // Captura el nombre de la variable
+                    i++;
+                temp = ft_strndup(&token->value[start], i - start); // Nombre de la variable
+                sub_expand = get_env_value(temp, env_lst); // Expande la variable si existe
+                free(temp);
+                if (!sub_expand) // Si la variable no existe, ignora la expansión
+                    sub_expand = ft_strdup("");
+                expand = ft_strjoin_free(expand, sub_expand); // Agrega la expansión
+            }
+        }
+    }
+    return (expand);
+}
+
 void expand_variables(t_token *token, t_env *env_lst)
 {
     char *new_value;
 
     if (token->expand)
     {
-        if (token->type == WORD || token->type == QUOTED)
+        if (token->type == QUOTED)
             new_value = expand_value(token, env_lst);
+        else if (token->type == WORD)
+            new_value = expand_word(token, env_lst);
         else
             return;
         // Libera el valor anterior y actualiza con el nuevo

@@ -11,7 +11,7 @@ int syntax_check(t_token *tkn_lst)
         {
             if (current->value[0] == '|')
             {
-                if (!current->next || current == tkn_lst || current->next->type == OPERATOR) // Pipe al inicio o sin comando después
+                if (!current->next || current == tkn_lst) // Pipe al inicio o sin comando después
                     return (ft_putstr_fd("Syntax error: invalid pipe\n", 2), 0);
             }
             else if (current->value[0] == '>' || current->value[0] == '<')

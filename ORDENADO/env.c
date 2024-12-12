@@ -85,8 +85,6 @@ void    print_env_list(t_env *env_list)
 
 char    *get_env_value(char *str, t_env *env_list)
 {
-    // if (str[0] == '$')
-    //     str++;
     while (env_list)
     {
         if (ft_strncmp(str, env_list->key, ft_strlen(str)) == 0)  
